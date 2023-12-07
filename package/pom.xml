@@ -257,6 +257,8 @@
                     <ignoreClass>org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand$</ignoreClass>
                     <!-- protobuf -->
                     <ignoreClass>com.google.protobuf.*</ignoreClass>
+                    <!-- hawtjni -->
+                    <ignoreClass>org.fusesource.hawtjni.runtime.*</ignoreClass>
                   </ignoreClasses>
                   <scopes>
                     <scope>compile</scope>
