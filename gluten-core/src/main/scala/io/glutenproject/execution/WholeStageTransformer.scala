@@ -280,17 +280,16 @@ case class WholeStageTransformer(child: SparkPlan, materializeInput: Boolean = f
             wsCxt.substraitContext.initSplitInfosIndex(0)
             wsCxt.substraitContext.setSplitInfos(splitInfos)
             val substraitPlan = wsCxt.root.toProtobuf
+            val substraitPlanAsText = substraitPlan.toString
+            logError(s"$nodeName generated plan $substraitPlanAsText")
+            AdbcClient.call(substraitPlan)
             GlutenPartition(
               index,
               substraitPlan.toByteArray,
               splitInfos.flatMap(_.preferredLocations().asScala).toArray)
         }
         (wsCxt, substraitPlanPartitions)
-      }(
-        t =>
-          logOnLevel(
-            substraitPlanLogLevel,
-            s"$nodeName generating the substrait plan took: $t ms."))
+      }(t => logError(s"$nodeName generating the substrait plan took: $t ms."))
 
       new GlutenWholeStageColumnarRDD(
         sparkContext,
@@ -315,10 +314,18 @@ case class WholeStageTransformer(child: SparkPlan, materializeInput: Boolean = f
        *      GlutenDataFrameAggregateSuite) in these cases, separate RDDs takes care of SCAN as a
        *      result, genFinalStageIterator rather than genFirstStageIterator will be invoked
        */
-      val resCtx = GlutenTimeMetric.withMillisTime(doWholeStageTransform()) {
+      val resCtx = GlutenTimeMetric.withMillisTime {
+        val resCxt = doWholeStageTransform()
+        val substraitPlan = resCxt.root.toProtobuf
+        val substraitPlanAsText = substraitPlan.toString
+        logError(s"$nodeName generated plan $substraitPlanAsText")
+        AdbcClient.call(substraitPlan)
+        resCxt
+      }(
         t =>
-          logOnLevel(substraitPlanLogLevel, s"$nodeName generating the substrait plan took: $t ms.")
-      }
+          logOnLevel(
+            substraitPlanLogLevel,
+            s"$nodeName generating the substrait plan without basic scan took: $t ms."))
       new WholeStageZippedPartitionsRDD(
         sparkContext,
         inputRDDs,

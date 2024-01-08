@@ -111,6 +111,7 @@ class ListenerApiImpl extends ListenerApi {
   }
 
   private def loadLibWithMacOS(loader: JniLibLoader): Unit = {
+    /*
     loader
       .newTransaction()
       .loadAndCreateLink(
@@ -122,6 +123,7 @@ class ListenerApiImpl extends ListenerApi {
         s"libparquet.$ARROW_VERSION.dylib",
         false)
       .commit()
+     */
   }
 
   private def initialize(conf: SparkConf): Unit = {
@@ -148,8 +150,8 @@ class ListenerApiImpl extends ListenerApi {
       return
     }
     val baseLibName = conf.get(GlutenConfig.GLUTEN_LIB_NAME, "gluten")
-    loader.mapAndLoad(baseLibName, false)
-    loader.mapAndLoad(VeloxBackend.BACKEND_NAME, false)
+    // loader.mapAndLoad(baseLibName, false)
+    // loader.mapAndLoad(VeloxBackend.BACKEND_NAME, false)
 
     initializeNative(conf.getAll.toMap)
 
@@ -177,7 +179,10 @@ object ListenerApiImpl {
     if (initFlag) {
       return
     }
-    NativeBackendInitializer.initializeBackend(conf)
+    // Pretend to call the initializer so we don't need to clean up the imports.
+    if (initFlag) {
+      NativeBackendInitializer.initializeBackend(conf)
+    }
     initFlag = true
   }
 }

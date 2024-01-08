@@ -199,6 +199,7 @@
                     <!-- jdo -->
                     <ignoreClass>javax.jdo.*</ignoreClass>
                     <!-- javax -->
+                    <ignoreClass>javax.annotation.*</ignoreClass>
                     <ignoreClass>javax.transaction.*</ignoreClass>
                     <ignoreClass>javax.xml.*</ignoreClass>
                     <!-- log4j -->

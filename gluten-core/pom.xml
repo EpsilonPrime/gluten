@@ -209,6 +209,12 @@
       <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>org.apache.arrow.adbc</groupId>
+      <artifactId>adbc-driver-flight-sql</artifactId>
+      <version>${adbc.version}</version>
+    </dependency>
   </dependencies>
 
   <profiles>

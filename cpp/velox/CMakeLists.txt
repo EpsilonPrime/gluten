@@ -344,7 +344,7 @@ add_velox_dependencies()
 # Arrow libraries appear after Velox dependencies to avoid linker error
 find_arrow_lib(${ARROW_LIB_NAME})
 find_arrow_lib(${PARQUET_LIB_NAME})
-target_link_libraries(velox PUBLIC Arrow::arrow Arrow::parquet)
+target_link_libraries(velox PUBLIC Arrow::arrow_static Arrow::parquet_static)
 
 target_link_libraries(velox PUBLIC Folly::folly)
 find_re2()
