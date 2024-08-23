@@ -20,23 +20,23 @@ import org.apache.gluten.substrait.expression.ExpressionNode;
 import org.apache.gluten.substrait.expression.WindowFunctionNode;
 import org.apache.gluten.substrait.extensions.AdvancedExtensionNode;
 
+import io.substrait.proto.ConsistentPartitionWindowRel;
 import io.substrait.proto.Rel;
 import io.substrait.proto.RelCommon;
 import io.substrait.proto.SortField;
-import io.substrait.proto.WindowRel;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class WindowRelNode implements RelNode, Serializable {
+public class ConsistentPartitionWindowRelNode implements RelNode, Serializable {
   private final RelNode input;
   private final List<WindowFunctionNode> windowFunctionNodes = new ArrayList<>();
   private final List<ExpressionNode> partitionExpressions = new ArrayList<>();
   private final List<SortField> sorts = new ArrayList<>();
   private final AdvancedExtensionNode extensionNode;
 
-  public WindowRelNode(
+  public ConsistentPartitionWindowRelNode(
       RelNode input,
       List<WindowFunctionNode> windowFunctionNodes,
       List<ExpressionNode> partitionExpressions,
@@ -48,7 +48,7 @@ public class WindowRelNode implements RelNode, Serializable {
     this.extensionNode = null;
   }
 
-  public WindowRelNode(
+  public ConsistentPartitionWindowRelNode(
       RelNode input,
       List<WindowFunctionNode> windowFunctionNodes,
       List<ExpressionNode> partitionExpressions,
@@ -66,16 +66,17 @@ public class WindowRelNode implements RelNode, Serializable {
     RelCommon.Builder relCommonBuilder = RelCommon.newBuilder();
     relCommonBuilder.setDirect(RelCommon.Direct.newBuilder());
 
-    WindowRel.Builder windowBuilder = WindowRel.newBuilder();
+    ConsistentPartitionWindowRel.Builder windowBuilder = ConsistentPartitionWindowRel.newBuilder();
     windowBuilder.setCommon(relCommonBuilder.build());
     if (input != null) {
       windowBuilder.setInput(input.toProtobuf());
     }
 
     for (WindowFunctionNode windowFunctionNode : windowFunctionNodes) {
-      WindowRel.Measure.Builder measureBuilder = WindowRel.Measure.newBuilder();
-      measureBuilder.setMeasure(windowFunctionNode.toProtobuf());
-      windowBuilder.addMeasures(measureBuilder.build());
+      ConsistentPartitionWindowRel.WindowRelFunction.Builder windowFunctionBuilder =
+          ConsistentPartitionWindowRel.WindowRelFunction.newBuilder();
+      windowFunctionBuilder.mergeFrom(windowFunctionNode.toProtobuf());
+      windowBuilder.addWindowFunctions(windowFunctionBuilder.build());
     }
 
     for (int i = 0; i < partitionExpressions.size(); i++) {

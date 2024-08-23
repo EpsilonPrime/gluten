@@ -323,16 +323,39 @@ message SortRel {
   substrait.extensions.AdvancedExtension advanced_extension = 10;
 }
 
-message WindowRel {
+// ConsistentPartitionWindowRel provides the ability to perform calculations across sets of rows
+// that are related to the current query row. It can be used to execute window functions where
+// all the windows share the same partitioning and ordering.
+message ConsistentPartitionWindowRel {
   RelCommon common = 1;
   Rel input = 2;
-  repeated Measure measures = 3;
+  repeated WindowRelFunction window_functions = 3;
   repeated Expression partition_expressions = 4;
   repeated SortField sorts = 5;
+
   substrait.extensions.AdvancedExtension advanced_extension = 10;
 
-  message Measure {
-    Expression.WindowFunction measure = 1;
+  // This message mirrors the `WindowFunction` message but removes the fields defining the partition,
+  // sorts, and bounds, since those must be consistent across the various functions in this rel.  Refer
+  // to the `WindowFunction` message for a description of these fields.
+  message WindowRelFunction {
+    uint32 function_reference = 1;
+
+    repeated FunctionArgument arguments = 9;
+
+    repeated FunctionOption options = 11;
+
+    Type output_type = 7;
+
+    AggregationPhase phase = 6;
+
+    AggregateFunction.AggregationInvocation invocation = 10;
+
+    Expression.WindowFunction.Bound lower_bound = 5;
+
+    Expression.WindowFunction.Bound upper_bound = 4;
+
+    Expression.WindowFunction.BoundsType bounds_type = 12;
   }
 }
 
@@ -504,15 +527,17 @@ message Rel {
     ExtensionMultiRel extension_multi = 10;
     ExtensionLeafRel extension_leaf = 11;
     CrossRel cross = 12;
+    WriteRel write = 19;
+    DdlRel ddl = 20;
     //Physical relations
     HashJoinRel hash_join = 13;
     MergeJoinRel merge_join = 14;
-    ExpandRel expand = 15;
-    WindowRel window = 16;
-    GenerateRel generate = 17;
-    WriteRel write = 18;
-    TopNRel top_n = 19;
-    WindowGroupLimitRel windowGroupLimit = 20;
+    ExpandRel expand = 16;
+    ConsistentPartitionWindowRel window = 17;
+    // Gluten-specific relations
+    GenerateRel generate = 1017;
+    TopNRel top_n = 1019;
+    WindowGroupLimitRel windowGroupLimit = 1020;
   }
 }
 
@@ -973,6 +998,9 @@ message Expression {
     // the same partition as the current record are aggregated.
     repeated Expression partitions = 2;
 
+    // Defines the bounds type: ROWS, RANGE
+    BoundsType bounds_type = 12;
+
     // Defines the record relative to the current record from which the window
     // extends. The bound is inclusive. If the lower bound indexes a record
     // greater than the upper bound, TODO (null range/no records passed?
@@ -980,8 +1008,7 @@ message Expression {
     // Optional; defaults to the start of the partition.
     Bound lower_bound = 5;
 
-    string column_name = 12;
-    WindowType window_type = 13;
+    string column_name = 1012;
 
     // Defines the record relative to the current record up to which the window
     // extends. The bound is inclusive. If the upper bound indexes a record
@@ -992,6 +1019,18 @@ message Expression {
 
     // Deprecated; use arguments instead.
     repeated Expression args = 8 [deprecated = true];
+
+    enum BoundsType {
+      BOUNDS_TYPE_UNSPECIFIED = 0;
+      // The lower and upper bound specify how many rows before and after the current row
+      // the window should extend.
+      BOUNDS_TYPE_ROWS = 1;
+      // The lower and upper bound describe a range of values.  The window should include all rows
+      // where the value of the ordering column is greater than or equal to (current_value - lower bound)
+      // and less than or equal to (current_value + upper bound).  This bounds type is only valid if there
+      // is a single ordering column.
+      BOUNDS_TYPE_RANGE = 2;
+    }
 
     // Defines one of the two boundaries for the window of a window function.
     message Bound {
@@ -1024,8 +1063,10 @@ message Expression {
       // Defines that the bound extends to or from the current record.
       message CurrentRow {}
 
+      // Defines an "unbounded bound" to the start of the partition.
       message Unbounded_Preceding {}
 
+      // Defines an "unbounded bound" to the end of the partition.
       message Unbounded_Following {}
 
       oneof kind {
@@ -1039,7 +1080,10 @@ message Expression {
         // The bound extends to the current record.
         CurrentRow current_row = 3;
 
+        // The bound extends to the start of the partition.
         Unbounded_Preceding unbounded_preceding = 4;
+
+        // The bound extends to the end of the partition.
         Unbounded_Following unbounded_following = 5;
       }
     }
@@ -1387,11 +1431,6 @@ enum AggregationPhase {
   // This call should combine the intermediate values to yield the final
   // return value.
   AGGREGATION_PHASE_INTERMEDIATE_TO_RESULT = 4;
-}
-
-enum WindowType {
-  ROWS = 0;
-  RANGE = 1;
 }
 
 // An aggregate function.

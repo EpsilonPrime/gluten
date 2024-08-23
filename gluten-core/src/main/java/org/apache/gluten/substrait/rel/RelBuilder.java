@@ -255,7 +255,7 @@ public class RelBuilder {
       SubstraitContext context,
       Long operatorId) {
     context.registerRelToOperator(operatorId);
-    return new WindowRelNode(
+    return new ConsistentPartitionWindowRelNode(
         input, windowFunctionNodes, partitionExpressions, sorts, extensionNode);
   }
 
@@ -267,7 +267,7 @@ public class RelBuilder {
       SubstraitContext context,
       Long operatorId) {
     context.registerRelToOperator(operatorId);
-    return new WindowRelNode(
+    return new ConsistentPartitionWindowRelNode(
         input, windowFunctionNodes,
         partitionExpressions, sorts);
   }

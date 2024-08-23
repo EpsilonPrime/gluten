@@ -23,7 +23,6 @@ import org.apache.gluten.substrait.type.TypeNode;
 import io.substrait.proto.Expression;
 import io.substrait.proto.FunctionArgument;
 import io.substrait.proto.FunctionOption;
-import io.substrait.proto.WindowType;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.PreComputeRangeFrameBound;
 
@@ -141,14 +140,14 @@ public class WindowFunctionNode implements Serializable {
     return builder;
   }
 
-  private WindowType getWindowType(String type) {
-    WindowType windowType;
+  private Expression.WindowFunction.BoundsType getBoundsType(String type) {
+    Expression.WindowFunction.BoundsType windowType;
     switch (type) {
       case ("ROWS"):
-        windowType = WindowType.forNumber(0);
+        windowType = Expression.WindowFunction.BoundsType.forNumber(1);
         break;
       case ("RANGE"):
-        windowType = WindowType.forNumber(1);
+        windowType = Expression.WindowFunction.BoundsType.forNumber(2);
         break;
       default:
         throw new UnsupportedOperationException("Only support ROWS and RANGE Frame type.");
@@ -179,7 +178,7 @@ public class WindowFunctionNode implements Serializable {
         Expression.WindowFunction.Bound.newBuilder();
     windowBuilder.setLowerBound(setBound(lowerBoundBuilder, lowerBound).build());
     windowBuilder.setUpperBound(setBound(upperBoundBuilder, upperBound).build());
-    windowBuilder.setWindowType(getWindowType(frameType));
+    windowBuilder.setBoundsType(getBoundsType(frameType));
     return windowBuilder.build();
   }
 }
