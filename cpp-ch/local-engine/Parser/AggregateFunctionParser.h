@@ -53,7 +53,7 @@ public:
 
         CommonFunctionInfo() { function_ref = -1; }
 
-        CommonFunctionInfo(const substrait::WindowRel::Measure & win_measure)
+        CommonFunctionInfo(const substrait::WindowRel::MeasureXXX & win_measure)
             : function_ref(win_measure.measure().function_reference())
             , arguments(win_measure.measure().arguments())
             , output_type(win_measure.measure().output_type())

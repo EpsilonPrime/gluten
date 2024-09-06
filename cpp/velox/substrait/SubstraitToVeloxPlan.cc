@@ -895,12 +895,12 @@ const core::WindowNode::Frame SubstraitToVeloxPlanConverter::createWindowFrame(
   return frame;
 }
 
-core::PlanNodePtr SubstraitToVeloxPlanConverter::toVeloxPlan(const ::substrait::WindowRel& windowRel) {
+core::PlanNodePtr SubstraitToVeloxPlanConverter::toVeloxPlan(const ::substrait::ConsistentPartitionWindowRel& windowRel) {
   core::PlanNodePtr childNode;
   if (windowRel.has_input()) {
     childNode = toVeloxPlan(windowRel.input());
   } else {
-    VELOX_FAIL("Child Rel is expected in WindowRel.");
+    VELOX_FAIL("Child Rel is expected in ConsistentPartitionWindowRel.");
   }
 
   const auto& inputType = childNode->outputType();
