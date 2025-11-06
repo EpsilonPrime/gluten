@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+syntax = "proto3";
+
+package substrait.extensions.gluten;
+
+import "substrait/type.proto";
+
+option csharp_namespace = "Substrait.Protobuf.Gluten";
+option go_package = "github.com/substrait-io/substrait-go/proto/extensions/gluten";
+option java_multiple_files = true;
+option java_package = "io.substrait.proto.gluten";
+
+// File-level schema extension for FileOrFiles
+// This provides per-file schema information which may differ from the
+// ReadRel's base_schema in cases of schema evolution or format-specific needs.
+message FileSchema {
+  // The schema specific to this file
+  substrait.NamedStruct schema = 1;
+}

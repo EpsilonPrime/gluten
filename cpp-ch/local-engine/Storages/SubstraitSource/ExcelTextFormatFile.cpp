@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <substrait/extensions/gluten_extensions.pb.h>
 
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypeDecimalBase.h>
@@ -71,10 +72,24 @@ FormatFile::InputFormatPtr ExcelTextFormatFile::createInputFormat(const DB::Bloc
 
     std::shared_ptr<DB::PeekableReadBuffer> buffer = std::make_unique<DB::PeekableReadBuffer>(*(res->read_buffer));
     DB::Names column_names;
-    column_names.reserve(file_info.schema().names_size());
-    for (const auto & item : file_info.schema().names())
+
+    // Extract schema from file_schema extension field
+    if (file_info.has_file_schema())
     {
-        column_names.push_back(item);
+        substrait::extensions::gluten::FileSchema file_schema_ext;
+        if (file_info.file_schema().UnpackTo(&file_schema_ext))
+        {
+            const auto & schema = file_schema_ext.schema();
+            column_names.reserve(schema.names_size());
+            for (const auto & item : schema.names())
+            {
+                column_names.push_back(item);
+            }
+        }
+        else
+        {
+            throw DB::Exception(DB::ErrorCodes::NOT_IMPLEMENTED, "Failed to unpack file_schema extension");
+        }
     }
 
     std::shared_ptr<local_engine::ExcelRowInputFormat> txt_input_format = std::make_shared<local_engine::ExcelRowInputFormat>(

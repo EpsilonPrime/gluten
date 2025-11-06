@@ -167,8 +167,14 @@ message ReadRel {
      }
      repeated partitionColumn partition_columns = 16;
 
-     /// File schema
-     NamedStruct schema = 17;
+     /// File schema extension (deprecated field 17)
+     /// Use file_schema extension instead, which should contain
+     /// substrait.extensions.gluten.FileSchema message
+     reserved 17;
+     reserved "schema";
+
+     /// Extension field for file-level schema and other extensions
+     google.protobuf.Any file_schema = 18;
     }
   }
 }

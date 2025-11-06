@@ -22,6 +22,8 @@ import io.glutenproject.expression.ConverterUtils;
 import io.substrait.proto.NamedStruct;
 import io.substrait.proto.ReadRel;
 import io.substrait.proto.Type;
+import io.substrait.proto.gluten.FileSchema;
+import com.google.protobuf.Any;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
@@ -138,8 +140,13 @@ public class LocalFilesNode implements SplitInfo {
       fileBuilder.setLength(lengths.get(i));
       fileBuilder.setStart(starts.get(i));
 
+      // Pack file schema into extension field
       NamedStruct namedStruct = buildNamedStruct();
-      fileBuilder.setSchema(namedStruct);
+      if (fileSchema != null) {
+        FileSchema fileSchemaExt = FileSchema.newBuilder().setSchema(namedStruct).build();
+        Any fileSchemaAny = Any.pack(fileSchemaExt);
+        fileBuilder.setFileSchema(fileSchemaAny);
+      }
 
       switch (fileFormat) {
         case ParquetReadFormat:

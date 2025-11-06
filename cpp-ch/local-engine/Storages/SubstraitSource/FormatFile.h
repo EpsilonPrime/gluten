@@ -27,6 +27,7 @@
 #include <Storages/SubstraitSource/ReadBufferBuilder.h>
 #include <Storages/SubstraitSource/SubstraitFileSourceStep.h>
 #include <substrait/plan.pb.h>
+#include <substrait/extensions/gluten_extensions.pb.h>
 #include <Parser/TypeParser.h>
 
 namespace DB
@@ -59,7 +60,20 @@ public:
 
     virtual DB::NamesAndTypesList getSchema() const
     {
-        const auto & schema = file_info.schema();
+        // Extract schema from file_schema extension field
+        substrait::NamedStruct schema;
+        if (file_info.has_file_schema())
+        {
+            substrait::extensions::gluten::FileSchema file_schema_ext;
+            if (file_info.file_schema().UnpackTo(&file_schema_ext))
+            {
+                schema = file_schema_ext.schema();
+            }
+            else
+            {
+                throw DB::Exception(DB::ErrorCodes::NOT_IMPLEMENTED, "Failed to unpack file_schema extension");
+            }
+        }
         auto header = TypeParser::buildBlockFromNamedStructWithoutDFS(schema);
         return header.getNamesAndTypesList();
     }
