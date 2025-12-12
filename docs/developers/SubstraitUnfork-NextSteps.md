@@ -193,23 +193,32 @@ These violate Substrait principles and must be removed:
 ### 📦 Legitimate Features (Migrate or Upstream)
 These are valid needs, candidate for AdvancedExtension or upstreaming:
 
-3. **TextReadOptions/JsonReadOptions** (6-8 hours)
-   - Valid file format support
-   - Could align with DelimiterSeparatedTextReadOptions
-   - Or propose JSON format support upstream
+3. **TextReadOptions → DelimiterSeparatedTextReadOptions** (4-6 hours)
+   - ✅ Text format already in v0.77.0 as DelimiterSeparatedTextReadOptions
+   - Migrate Gluten's TextReadOptions to use official version
+   - Map field_delimiter, quote, escape, etc. to official fields
 
-4. **partition_columns in FileOrFiles** (Already exists!)
+4. **JsonReadOptions** (4-6 hours)
+   - JSON format NOT in official Substrait
+   - Options: Propose upstream OR use AdvancedExtension
+   - Check if can align with DelimiterSeparatedTextReadOptions
+
+5. **partition_columns in FileOrFiles** (Already exists!)
    - This is actually the RIGHT way to handle partitions
    - Keep this, use it properly instead of column_types
 
-5. **WindowRel** (8-12 hours)
+6. **WindowRel** (8-12 hours)
    - Check if ConsistentPartitionWindowRel in v0.77.0 can replace
    - If not, keep as Gluten extension or propose upstream
 
-6. **GenerateRel** (8-12 hours)
-   - Table-generating functions (EXPLODE, etc.)
-   - Strong candidate for upstreaming
-   - Critical Spark feature
+7. **GenerateRel** (HIGHEST PRIORITY FOR UPSTREAM) ⭐
+   - **Does NOT exist in Substrait v0.77.0**
+   - **No active proposal found in Substrait**
+   - Critical for: EXPLODE, POSEXPLODE, UNNEST, LATERAL VIEW
+   - Used by ALL major SQL engines (Spark, Presto, DuckDB, PostgreSQL)
+   - **Action: Propose to Substrait community**
+   - See detailed proposal: `GenerateRel-UpstreamProposal.md`
+   - Estimated upstream effort: 4-8 weeks
 
 ### 🤔 Needs Investigation
 These may not be needed at all:
@@ -255,10 +264,17 @@ These may not be needed at all:
 6. 🪟 **Review window_type** - Is it needed?
 
 ### Phase 4: Migrate Legitimate Features (20-30 hours)
-7. 📦 **TextReadOptions/JsonReadOptions** - Migrate or upstream
-8. 📦 **WindowRel** - Evaluate vs ConsistentPartitionWindowRel
-9. 📦 **GenerateRel** - Propose upstreaming
+7. 📦 **TextReadOptions** - Migrate to DelimiterSeparatedTextReadOptions (already in v0.77.0)
+8. 📦 **JsonReadOptions** - Propose upstream or use AdvancedExtension
+9. 📦 **WindowRel** - Evaluate vs ConsistentPartitionWindowRel
 10. 📦 **ddl.proto** - Migrate or replace with WriteRel
+
+### Phase 5: Upstream GenerateRel (Parallel to Phase 4)
+11. ⭐ **Propose GenerateRel to Substrait** (CRITICAL)
+    - Open discussion issue in substrait-io/substrait
+    - Use template from GenerateRel-UpstreamProposal.md
+    - Essential for Spark EXPLODE/UNNEST support
+    - Benefits entire Substrait ecosystem
 
 **Total Estimated Effort:** 40-60 hours
 **Target:** All modifications either removed or in AdvancedExtension
@@ -278,7 +294,8 @@ These may not be needed at all:
 | Nothing type | Investigate | 🔍 TBD | - | 3-4h | -6 |
 | schema field | Investigate | 🔍 TBD | - | 3-4h | -3 |
 | window_type | Investigate | 🔍 TBD | - | 2-3h | -2 |
-| Text/JsonReadOptions | Legitimate | 📦 Migrate | - | 6-8h | -20 |
+| TextReadOptions | Migrate to official | 📦 Migrate | - | 4-6h | -10 |
+| JsonReadOptions | Legitimate | 📦 Upstream/Ext | - | 4-6h | -10 |
 | partition_columns | Legitimate | ✅ Keep | - | 0h | 0 |
 | WindowRel | Legitimate | 📦 Evaluate | - | 8-12h | -40 |
 | GenerateRel | Legitimate | 📦 Upstream | - | 8-12h | -35 |
@@ -315,10 +332,17 @@ These may not be needed at all:
 
 ### Should I upstream features to Substrait?
 
+**MUST upstream (critical missing features):**
+- ⭐ **GenerateRel** - Does NOT exist in Substrait, used by ALL major SQL engines
+  - EXPLODE, POSEXPLODE, UNNEST, LATERAL VIEW operations
+  - See `GenerateRel-UpstreamProposal.md` for full proposal
+
 **Good candidates for upstreaming:**
-- ✅ GenerateRel (table-generating functions) - Critical Spark feature
-- ✅ TextReadOptions/JsonReadOptions - Common file formats
-- 🤔 partition_columns (if not already upstream-able)
+- ✅ JsonReadOptions - Common file format
+- 🤔 partition_columns (may already be acceptable)
+
+**Already in Substrait v0.77.0:**
+- ✅ TextReadOptions → Use DelimiterSeparatedTextReadOptions instead
 
 **Wrong candidates (anti-patterns):**
 - ❌ column_types - This is the WRONG approach, don't propose
@@ -349,9 +373,10 @@ These may not be needed at all:
 - Update SubstraitDiffAnalysis.md with results
 
 **This Quarter:**
-- 📦 Migrate legitimate features (TextReadOptions, JsonReadOptions)
+- ⭐ **CRITICAL: Propose GenerateRel to Substrait** (see GenerateRel-UpstreamProposal.md)
+- 📦 Migrate TextReadOptions to DelimiterSeparatedTextReadOptions
+- 📦 Migrate JsonReadOptions (upstream or AdvancedExtension)
 - 📦 Evaluate WindowRel vs ConsistentPartitionWindowRel
-- 📦 Propose upstreaming GenerateRel
 - Get diff below 100 lines
 
 ---
@@ -361,6 +386,7 @@ These may not be needed at all:
 - [SubstraitDiffAnalysis.md](SubstraitDiffAnalysis.md) - Complete diff analysis
 - [SubstraitModifications.md](SubstraitModifications.md) - Historical modifications list
 - [MigrationPlan-OutputSchemaToExtension.md](MigrationPlan-OutputSchemaToExtension.md) - Example migration plan
+- [GenerateRel-UpstreamProposal.md](GenerateRel-UpstreamProposal.md) - **NEW: Full proposal for upstreaming GenerateRel**
 
 ---
 
