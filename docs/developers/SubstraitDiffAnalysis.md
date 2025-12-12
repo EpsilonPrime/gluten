@@ -7,7 +7,7 @@ parent: Developer Overview
 
 # Substrait Proto Diff Analysis
 
-**Date:** 2025-11-05
+**Date:** 2025-11-05 (Updated: 2025-12-12)
 **Gluten Base Version:** Substrait v0.23.0 (with custom modifications)
 **Official Latest Version:** v0.77.0
 **Version Gap:** 54 releases behind
@@ -16,9 +16,17 @@ parent: Developer Overview
 
 This document provides a detailed, line-by-line analysis of the differences between Gluten's forked Substrait proto files and the official Substrait v0.23.0 release. This serves as the baseline for any unfork effort.
 
+### Migration Progress
+
+**Completed Migrations:**
+- ✅ ParquetReadOptions.enable_row_group_maxmin_index → Removed (PR #11277)
+- ✅ RelRoot.output_schema → Replaced with ProjectRel (PR #11278)
+
+**Remaining Custom Modifications:** ~200 lines
+
 ### Files Modified
 
-- ✅ **algebra.proto**: **222 lines of diff** - Significant custom modifications
+- ✅ **algebra.proto**: **~200 lines of diff remaining** (down from 222)
 - ✅ **type.proto**: **40 lines of diff** - Medium custom modifications
 - ➕ **ddl.proto**: **NEW FILE** - Not in official v0.23.0
 - ✅ **plan.proto**: No changes (identical to official)
@@ -34,7 +42,7 @@ This document provides a detailed, line-by-line analysis of the differences betw
 
 ### 1. algebra.proto Modifications
 
-#### 1.1 Enhanced ParquetReadOptions (Lines 121-134)
+#### 1.1 ~~Enhanced ParquetReadOptions~~ ✅ COMPLETED
 ```diff
 +      message ParquetReadOptions {
 +        bool enable_row_group_maxmin_index = 1;
@@ -43,6 +51,7 @@ This document provides a detailed, line-by-line analysis of the differences betw
 **Purpose:** Enable row group min/max index for better Parquet filtering
 **Impact:** Low - Optional optimization field
 **Upstream Status:** Not in v0.77.0
+**Migration Status:** ✅ **REMOVED in PR #11277** - Field was unused and has been deleted
 
 #### 1.2 Added TextReadOptions (Lines 138-148)
 ```diff
@@ -145,7 +154,7 @@ This document provides a detailed, line-by-line analysis of the differences betw
 **Impact:** MEDIUM - Required for advanced GROUP BY operations
 **Upstream Status:** ✅ **UPSTREAMED to v0.77.0!** This should work directly.
 
-#### 1.8 Added output_schema in RelRoot (Lines 418-423)
+#### 1.8 ~~Added output_schema in RelRoot~~ ✅ COMPLETED
 ```diff
  message RelRoot {
    Rel input = 1;
@@ -156,6 +165,7 @@ This document provides a detailed, line-by-line analysis of the differences betw
 **Purpose:** Provide complete type schema at root, not just field names
 **Impact:** MEDIUM - Useful for schema validation
 **Upstream Status:** Not in v0.77.0
+**Migration Status:** ✅ **REPLACED in PR #11278** - Now uses explicit ProjectRel for type enforcement instead of implicit output_schema field
 
 #### 1.9 Added GenerateRel (Lines 1252+)
 ```diff
@@ -274,62 +284,135 @@ message Dll {
 
 ---
 
-## Migration Priority Matrix
+## Migration Progress Tracker
 
-### Critical (Must Address)
-- **TextReadOptions/JsonReadOptions** → Use DelimiterSeparatedTextReadOptions or AdvancedExtension
-- **column_types in NamedStruct** → Strong candidate for upstreaming to Substrait
-- **WindowRel** → Evaluate ConsistentPartitionWindowRel or use AdvancedExtension
-- **GenerateRel** → Propose upstreaming or use AdvancedExtension
-- **partition_columns in FileOrFiles** → Propose upstreaming or use AdvancedExtension
+### ✅ Completed (2 items)
+- **ParquetReadOptions.enable_row_group_maxmin_index** → REMOVED (PR #11277)
+- **output_schema in RelRoot** → REPLACED with ProjectRel (PR #11278)
 
-### Medium (Should Address)
-- **output_schema in RelRoot** → May not be needed, or use AdvancedExtension
-- **Nothing type** → Evaluate if actually used, may not be needed
-- **WindowFunction modifications** → Review if needed in modern Substrait
+### 🔄 Next Steps - Updated Priority Matrix
 
-### Low (Nice to Have)
-- **enable_row_group_maxmin_index** → Optional optimization
-- **window metadata fields** → Optional metadata
-- **ddl.proto** → May be deprecated in favor of WriteRel
+### Critical (Must Address) - 5 items
+1. **TextReadOptions/JsonReadOptions** → Use DelimiterSeparatedTextReadOptions or AdvancedExtension
+2. **WindowRel** → Evaluate ConsistentPartitionWindowRel or use AdvancedExtension
+3. **GenerateRel** → Propose upstreaming or use AdvancedExtension
+4. **partition_columns in FileOrFiles** → Propose upstreaming or use AdvancedExtension
+5. **column_types in NamedStruct** → Strong candidate for upstreaming to Substrait
 
----
+### Medium (Should Address) - 4 items
+1. **schema field in FileOrFiles** → May be redundant with ReadRel.base_schema
+2. **WindowFunction modifications (window_type, column_name, Unbounded)** → Used by ClickHouse backend
+3. **Nothing type** → Used in multiple places, needs investigation
+4. **ddl.proto** → Used for INSERT operations
 
-## Recommended First Step
-
-The **easiest and most impactful first step** is:
-
-### ✅ Document Current Usage
-
-Create an inventory of which Gluten code actually uses each custom field:
-
-```bash
-# Search for WindowRel usage
-grep -r "WindowRel" --include="*.scala" --include="*.java"
-
-# Search for GenerateRel usage
-grep -r "GenerateRel" --include="*.scala" --include="*.java"
-
-# Search for TextReadOptions usage
-grep -r "TextReadOptions" --include="*.scala" --include="*.java"
-```
-
-This will:
-1. Be completely non-invasive (no code changes)
-2. Show which features are actually critical vs unused
-3. Help prioritize the migration work
-4. Take only 1-2 hours
-5. Provide concrete data for planning
+### Low (Nice to Have) - 1 item
+1. **names in Struct** → Already upstreamed to v0.77.0, get free by upgrading
 
 ---
 
-## Next Steps
+## Updated Recommendations (Post PR #11277, #11278)
 
-After documenting current usage:
+### 🎯 Best Next Steps (Ranked by Effort/Impact)
 
-1. **Short term:** Update SubstraitModifications.md with this detailed analysis
-2. **Medium term:** Propose upstreaming high-value features to Substrait community
-3. **Long term:** Migrate to official Substrait with AdvancedExtension for non-upstreamed features
+#### Option 1: Upgrade to Substrait v0.77.0 (HIGHEST IMPACT)
+**Effort:** 6-8 hours
+**Impact:** Eliminates 2 modifications for free
+
+**What you get:**
+- ✅ ExpandRel (already upstreamed)
+- ✅ names in Struct (already upstreamed)
+- ✅ Better foundation for future migrations
+- ✅ Reduces diff from ~200 lines to ~170 lines
+
+**Recommendation:** Do this first to maximize compatibility
+
+---
+
+#### Option 2: Tackle Individual Modifications (INCREMENTAL)
+
+Listed in order of easiest → hardest:
+
+**1. JOIN_TYPE enum verification (30 min)**
+- Verify if LEFT_SEMI/RIGHT_SEMI changes are actually custom or already in v0.23.0
+- May not need any migration
+
+**2. column_types in NamedStruct (2-3 hours)**
+- Single enum + field
+- Clear purpose (partition vs data columns)
+- Good candidate for upstreaming to Substrait
+- Can use AdvancedExtension as interim
+
+**3. WindowFunction metadata fields (2-3 hours)**
+- `window_type`, `column_name` fields
+- `Unbounded_Preceding/Following` split
+- Isolated to window function handling
+- Can use AdvancedExtension
+
+**4. Nothing type (3-4 hours)**
+- Used in multiple places but not pervasive
+- Investigation needed on whether it's truly required
+- May be able to use existing nullable semantics
+
+**5. schema field in FileOrFiles (3-4 hours)**
+- Currently used by ExcelTextFormatFile
+- May be redundant with ReadRel.base_schema
+- Needs careful analysis
+
+**6. ddl.proto (4-6 hours)**
+- Entire custom file
+- Used for INSERT operations
+- May be replaceable with WriteRel
+- Requires coordination across backends
+
+**7. partition_columns in FileOrFiles (4-6 hours)**
+- Critical for Hive-style partitioning
+- Strong upstreaming candidate
+- Complex due to wide usage
+
+**8. TextReadOptions/JsonReadOptions (6-8 hours)**
+- High complexity, widely used
+- May align with DelimiterSeparatedTextReadOptions
+- Critical for CSV/JSON file support
+
+**9. WindowRel (8-12 hours)**
+- Large custom message
+- Check if ConsistentPartitionWindowRel can replace it
+- High complexity migration
+
+**10. GenerateRel (8-12 hours)**
+- Large custom message
+- Table-generating functions (EXPLODE, etc.)
+- High complexity, propose upstreaming
+
+---
+
+### 🚀 Recommended Path Forward
+
+**Phase 1: Quick Wins (8-10 hours)**
+1. Upgrade to v0.77.0
+2. Verify JOIN_TYPE changes
+3. Migrate column_types to AdvancedExtension
+
+**Phase 2: Medium Effort (12-16 hours)**
+4. Migrate WindowFunction metadata
+5. Investigate Nothing type
+6. Analyze schema field redundancy
+
+**Phase 3: Major Migrations (20-30 hours)**
+7. Propose upstreaming: column_types, partition_columns, GenerateRel
+8. Migrate file format options (Text/Json)
+9. Evaluate WindowRel vs ConsistentPartitionWindowRel
+10. Handle ddl.proto
+
+---
+
+### Progress Metrics
+
+**Original Diff:** 262 lines
+**After PR #11277, #11278:** ~200 lines
+**After v0.77.0 upgrade:** ~170 lines (estimated)
+**After Phase 1:** ~150 lines (estimated)
+**Target:** < 100 lines or all in AdvancedExtension
 
 ---
 
