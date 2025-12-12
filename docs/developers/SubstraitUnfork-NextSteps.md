@@ -8,13 +8,30 @@ parent: Developer Overview
 # Substrait Unfork: Next Steps
 
 **Last Updated:** 2025-12-12
-**Completed PRs:** #11277 (ParquetReadOptions), #11278 (output_schema)
+**Completed PRs:** #11277 (ParquetReadOptions), #11278 (output_schema), JOIN_TYPE (already correct)
+
+---
+
+## ⚠️ Important Clarifications (UPDATED)
+
+**Key Insight:** Not all custom modifications should be migrated to AdvancedExtension!
+
+Some modifications are **anti-patterns** that violate Substrait design principles:
+- ❌ `column_types` in NamedStruct - Wrong approach, should use `partition_columns` instead
+- ❌ `column_name` in WindowFunction - Inappropriate metadata, should use field references
+
+**These must be REMOVED and Gluten FIXED**, not migrated to extensions.
+
+**What's correct:**
+- ✅ `partition_columns` in FileOrFiles - This is the RIGHT way (keep it!)
+- ✅ JOIN_TYPE changes - Already handled correctly
+- ✅ Using ProjectRel for type enforcement (PR #11278)
 
 ---
 
 ## 🎯 What to Tackle Next
 
-After completing PR #11277 and #11278, here are your best options ranked by effort/impact:
+After completing PR #11277 and #11278, here are the correct next steps:
 
 ### ⭐ RECOMMENDED: Upgrade to v0.77.0 First
 
@@ -38,37 +55,26 @@ After completing PR #11277 and #11278, here are your best options ranked by effo
 
 If you prefer smaller changes, tackle in this order:
 
-### 1. Verify JOIN_TYPE Changes (30 minutes) ⚡
+### 1. ✅ JOIN_TYPE Changes - Already Correct
 
-**What:** Check if LEFT_SEMI/RIGHT_SEMI are actually custom modifications
-
-**Why:** May not be a real diff - official v0.23.0 might already have them
-
-**Steps:**
-```bash
-diff /tmp/substrait-official-v0.23.0/proto/substrait/algebra.proto \
-     gluten-core/src/main/resources/substrait/proto/substrait/algebra.proto | \
-     grep -A10 "enum JoinType"
-```
-
-**If they match:** Just document, no migration needed!
+**Status:** No action needed - already handled correctly
 
 ---
 
-### 2. Migrate column_types in NamedStruct (2-3 hours) 🔧
+### 2. Fix column_types Anti-Pattern (4-6 hours) 🔧
 
-**What:** Move partition column markers to AdvancedExtension
+**What:** Remove `column_types` from NamedStruct and fix Gluten properly
 
-**Why:** Clean, isolated change with clear purpose
+**Why:** This violates Substrait design principles - partition columns should be handled differently
 
 **File:** `type.proto`
 
-**Current:**
+**Current (WRONG):**
 ```proto
 message NamedStruct {
   repeated string names = 1;
   Type.Struct struct = 2;
-  repeated ColumnType column_types = 3;  // CUSTOM
+  repeated ColumnType column_types = 3;  // ANTI-PATTERN - REMOVE
   enum ColumnType {
     NORMAL_COL = 0;
     PARTITION_COL = 1;
@@ -76,42 +82,52 @@ message NamedStruct {
 }
 ```
 
+**Correct Approach:**
+- Partition columns should be in `partition_columns` field of FileOrFiles (already exists!)
+- NamedStruct should only describe the schema structure
+- Read path should differentiate based on FileOrFiles metadata, not NamedStruct
+
 **Migration:**
-1. Create `ColumnTypesExtension` in gluten_substrait_extensions.proto
-2. Pack into NamedStruct's AdvancedExtension field
-3. Update Java/Scala code to pack/unpack
-4. Update C++ parsers to read from extension
-5. Test with partitioned tables
+1. Audit all uses of `column_types` in Gluten
+2. Refactor to use `partition_columns` from FileOrFiles instead
+3. Remove `column_types` from type.proto
+4. Update C++ parsers to read partition info from correct location
+5. Test with partitioned Parquet/ORC tables
 
-**Complexity:** Medium - Used in file reading, but well-isolated
-
-**Alternative:** Propose upstreaming to Substrait (good candidate!)
+**Complexity:** Medium-High - Requires refactoring column handling logic
 
 ---
 
-### 3. Migrate WindowFunction Metadata (2-3 hours) 🪟
+### 3. Fix WindowFunction Metadata Anti-Pattern (3-4 hours) 🪟
 
-**What:** Move `window_type`, `column_name` to AdvancedExtension
+**What:** Remove `column_name` from WindowFunction and fix window handling
+
+**Why:** Column names don't belong in function metadata - this is inappropriate use of Substrait
 
 **Files:** `algebra.proto` (WindowFunction message)
 
-**Current:**
+**Current (WRONG):**
 ```proto
 message WindowFunction {
   // ... existing fields ...
-  string column_name = 12;        // CUSTOM
-  WindowType window_type = 13;    // CUSTOM
+  string column_name = 12;        // ANTI-PATTERN - REMOVE
+  WindowType window_type = 13;    // May need review
 }
 ```
 
-**Migration:**
-1. Create `WindowFunctionMetadata` extension
-2. Pack into WindowFunction's AdvancedExtension
-3. Update ClickHouse WindowRelParser.cpp
-4. Update Velox window parsers
-5. Test with window queries (ROW_NUMBER, RANK, etc.)
+**Correct Approach:**
+- Column names come from field references in the window expression
+- WindowFunction should only describe the function itself
+- Window result columns defined by WindowRel, not individual functions
 
-**Complexity:** Medium - Isolated to window function handling
+**Migration:**
+1. Audit uses of `column_name` in WindowRelParser.cpp and elsewhere
+2. Refactor to derive column names from proper sources (WindowRel.measures, output mapping, etc.)
+3. Remove `column_name` from proto
+4. Review if `window_type` is also redundant
+5. Test window queries (ROW_NUMBER, RANK, LAG, LEAD)
+
+**Complexity:** Medium - Requires understanding window function output naming
 
 ---
 
@@ -161,51 +177,113 @@ message WindowFunction {
 
 ---
 
-## 🎯 Recommended Sequence
+## 🎯 Corrected Categorization
 
-### Short Term (Next 2 weeks)
-1. ✅ Verify JOIN_TYPE (30 min)
-2. 🚀 Upgrade to v0.77.0 (6-8 hours)
-3. 🔧 Migrate column_types (2-3 hours)
+### 🔧 Anti-Patterns to Fix (Remove + Fix Gluten)
+These violate Substrait principles and must be removed:
 
-**Total:** ~10-12 hours
-**Diff Reduction:** ~50 lines
+1. **column_types in NamedStruct** (4-6 hours)
+   - Use `partition_columns` in FileOrFiles instead
+   - Remove from proto, fix Gluten column handling
 
-### Medium Term (Next month)
-4. 🪟 Migrate WindowFunction metadata (2-3 hours)
-5. 🔍 Investigate Nothing type (3-4 hours)
-6. 📄 Analyze schema field (3-4 hours)
+2. **column_name in WindowFunction** (3-4 hours)
+   - Derive from proper field references
+   - Remove from proto, fix window naming logic
 
-**Total:** ~8-11 hours
-**Diff Reduction:** ~20 lines
+### 📦 Legitimate Features (Migrate or Upstream)
+These are valid needs, candidate for AdvancedExtension or upstreaming:
 
-### Long Term (Next quarter)
-7. Propose upstreaming to Substrait: column_types, partition_columns
-8. Major migrations: TextReadOptions, JsonReadOptions, WindowRel, GenerateRel
-9. Evaluate ddl.proto replacement with WriteRel
+3. **TextReadOptions/JsonReadOptions** (6-8 hours)
+   - Valid file format support
+   - Could align with DelimiterSeparatedTextReadOptions
+   - Or propose JSON format support upstream
 
-**Total:** ~40-60 hours
-**Diff Reduction:** ~100+ lines
+4. **partition_columns in FileOrFiles** (Already exists!)
+   - This is actually the RIGHT way to handle partitions
+   - Keep this, use it properly instead of column_types
+
+5. **WindowRel** (8-12 hours)
+   - Check if ConsistentPartitionWindowRel in v0.77.0 can replace
+   - If not, keep as Gluten extension or propose upstream
+
+6. **GenerateRel** (8-12 hours)
+   - Table-generating functions (EXPLODE, etc.)
+   - Strong candidate for upstreaming
+   - Critical Spark feature
+
+### 🤔 Needs Investigation
+These may not be needed at all:
+
+7. **Nothing type** (3-4 hours)
+   - Investigate if truly needed
+   - May be replaceable with standard nullable semantics
+
+8. **schema field in FileOrFiles** (3-4 hours)
+   - May be redundant with ReadRel.base_schema
+   - Or needed only for specific formats
+
+9. **window_type in WindowFunction** (2-3 hours)
+   - Investigate if redundant
+   - May be derivable from window spec
+
+10. **ddl.proto** (4-6 hours)
+    - May be replaceable with WriteRel
+    - Note: "Dll" typo suggests this was hastily added
+
+### ⬆️ Free Wins from v0.77.0 Upgrade
+11. **ExpandRel** - Already upstreamed
+12. **names in Struct** - Already upstreamed
+13. **Unbounded_Preceding/Following** - May already be fixed
+
+---
+
+## 🚀 Recommended Sequence (CORRECTED)
+
+### Phase 1: Foundation (6-8 hours)
+1. 🚀 **Upgrade to v0.77.0 first**
+   - Get ExpandRel, Struct.names for free
+   - See what else is already fixed
+   - Better foundation for all other work
+
+### Phase 2: Fix Anti-Patterns (7-10 hours)
+2. 🔧 **Fix column_types** - Remove and use partition_columns properly
+3. 🪟 **Fix column_name in WindowFunction** - Use proper field references
+
+### Phase 3: Investigate Questionable Fields (8-12 hours)
+4. 🔍 **Investigate Nothing type** - Can it be removed?
+5. 📄 **Analyze schema field** - Is it redundant?
+6. 🪟 **Review window_type** - Is it needed?
+
+### Phase 4: Migrate Legitimate Features (20-30 hours)
+7. 📦 **TextReadOptions/JsonReadOptions** - Migrate or upstream
+8. 📦 **WindowRel** - Evaluate vs ConsistentPartitionWindowRel
+9. 📦 **GenerateRel** - Propose upstreaming
+10. 📦 **ddl.proto** - Migrate or replace with WriteRel
+
+**Total Estimated Effort:** 40-60 hours
+**Target:** All modifications either removed or in AdvancedExtension
 
 ---
 
 ## 📊 Progress Tracker
 
-| Modification | Status | PR/Issue | Effort | Lines |
-|--------------|--------|----------|--------|-------|
-| ParquetReadOptions | ✅ Done | #11277 | - | -10 |
-| output_schema | ✅ Done | #11278 | - | -12 |
-| JOIN_TYPE | 🔄 Next | - | 30m | ~0? |
-| v0.77.0 Upgrade | 🎯 Recommended | - | 6-8h | -30 |
-| column_types | 📋 Queued | - | 2-3h | -8 |
-| WindowFunction meta | 📋 Queued | - | 2-3h | -5 |
-| Nothing type | 📋 Queued | - | 3-4h | -6 |
-| schema field | 📋 Queued | - | 3-4h | -3 |
-| Text/JsonReadOptions | ⏳ Later | - | 6-8h | -20 |
-| partition_columns | ⏳ Later | - | 4-6h | -10 |
-| WindowRel | ⏳ Later | - | 8-12h | -40 |
-| GenerateRel | ⏳ Later | - | 8-12h | -35 |
-| ddl.proto | ⏳ Later | - | 4-6h | -25 |
+| Modification | Category | Status | PR/Issue | Effort | Lines |
+|--------------|----------|--------|----------|--------|-------|
+| ParquetReadOptions | Removed | ✅ Done | #11277 | - | -10 |
+| output_schema | Fixed | ✅ Done | #11278 | - | -12 |
+| JOIN_TYPE | Correct | ✅ Done | - | - | 0 |
+| v0.77.0 Upgrade | Foundation | 🎯 Next | - | 6-8h | -30 |
+| column_types | Anti-pattern | 🔧 Fix | - | 4-6h | -8 |
+| column_name (Window) | Anti-pattern | 🔧 Fix | - | 3-4h | -3 |
+| Nothing type | Investigate | 🔍 TBD | - | 3-4h | -6 |
+| schema field | Investigate | 🔍 TBD | - | 3-4h | -3 |
+| window_type | Investigate | 🔍 TBD | - | 2-3h | -2 |
+| Text/JsonReadOptions | Legitimate | 📦 Migrate | - | 6-8h | -20 |
+| partition_columns | Legitimate | ✅ Keep | - | 0h | 0 |
+| WindowRel | Legitimate | 📦 Evaluate | - | 8-12h | -40 |
+| GenerateRel | Legitimate | 📦 Upstream | - | 8-12h | -35 |
+| ddl.proto | Investigate | 🔍 TBD | - | 4-6h | -25 |
+| Unbounded split | Check v0.77.0 | ⬆️ Maybe free | - | 0h | -3 |
 
 **Current Diff:** ~200 lines (down from 262)
 **After recommended path:** ~150 lines
@@ -227,17 +305,29 @@ message WindowFunction {
 - Want to minimize risk per change
 - Prefer smaller, more controlled migrations
 
+### Should I fix anti-patterns or migrate them?
+
+**Anti-patterns - MUST FIX, not migrate:**
+- ❌ column_types - Use partition_columns instead
+- ❌ column_name in WindowFunction - Use proper field references
+
+**DON'T migrate these to AdvancedExtension - they're design violations!**
+
 ### Should I upstream features to Substrait?
 
 **Good candidates for upstreaming:**
-- ✅ column_types (partition column marking)
-- ✅ partition_columns (Hive-style partitioning)
-- ✅ GenerateRel (table-generating functions)
+- ✅ GenerateRel (table-generating functions) - Critical Spark feature
+- ✅ TextReadOptions/JsonReadOptions - Common file formats
+- 🤔 partition_columns (if not already upstream-able)
 
-**Less likely to be accepted:**
-- ❌ Nothing type (may have standard alternative)
-- ❌ WindowFunction metadata (may be redundant)
-- ❌ ddl.proto (overlaps with WriteRel)
+**Wrong candidates (anti-patterns):**
+- ❌ column_types - This is the WRONG approach, don't propose
+- ❌ column_name in WindowFunction - Violates Substrait design
+
+**Investigate first:**
+- 🤔 Nothing type - May not be needed
+- 🤔 WindowRel - Check if ConsistentPartitionWindowRel already solves it
+- 🤔 ddl.proto - Likely overlaps with WriteRel
 
 **How to upstream:**
 1. Open discussion in substrait-io/substrait
@@ -249,21 +339,19 @@ message WindowFunction {
 
 ## 📞 Next Steps Summary
 
-**Immediate (Today):**
-1. Read this document
-2. Decide: v0.77.0 upgrade OR incremental path
-3. Start with JOIN_TYPE verification (30 min quick win)
-
-**This Week:**
-- Complete chosen path (either upgrade or column_types migration)
-- Update SubstraitDiffAnalysis.md with results
+**Immediate (This Week):**
+1. 🚀 Upgrade to v0.77.0 (foundation for everything)
+2. 🔧 Fix column_types anti-pattern (use partition_columns properly)
 
 **This Month:**
-- Complete 2-3 more incremental migrations
-- Propose upstreaming for column_types
+- 🪟 Fix column_name in WindowFunction anti-pattern
+- 🔍 Investigate Nothing type, schema field, window_type
+- Update SubstraitDiffAnalysis.md with results
 
 **This Quarter:**
-- Major migrations (WindowRel, GenerateRel, file format options)
+- 📦 Migrate legitimate features (TextReadOptions, JsonReadOptions)
+- 📦 Evaluate WindowRel vs ConsistentPartitionWindowRel
+- 📦 Propose upstreaming GenerateRel
 - Get diff below 100 lines
 
 ---
